@@ -2,10 +2,16 @@ package com.example.tacticfakegps.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+val DarkGreen = Color(0xFF0B3D0B)       // tumši zaļš
+val DarkBrown = Color(0xFF4B2E00)       // tumši brūns
+val Black = Color(0xFF000000)            // melns
+val White = Color(0xFFFFFFFF)            // balts
+val OliveGreen = Color(0xFF556B2F)      // olīvu zaļš, ja vajag kā papildus
+val ArmyGreen = Color(0xFF3B5323)       // militārā zaļā nokrāsa
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val DarkGreenLight = Color(0xFF225522)
+val DarkBrownLight = Color(0xFF6E3F00)
+
+// Krāsas neaktīvām pogām
+val DisabledBackground = Color(0xFF81C784) // gaiši zaļa, kā pogas fons, kad disabled
+val DisabledContent = Color(0xFF2E7D32)    // tumšāka zaļa tekstam disabled pogā
