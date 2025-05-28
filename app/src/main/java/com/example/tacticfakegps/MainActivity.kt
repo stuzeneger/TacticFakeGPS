@@ -46,34 +46,30 @@ class MainActivity : ComponentActivity() {
         val isBootEnabled = try {
             prefs.getBoolean("boot_location_enabled", false)
         } catch (e: ClassCastException) {
-            // Ja iepriekš glabājās kā String, dzēšam šo kļūdaino vērtību
             prefs.edit().remove("boot_location_enabled").apply()
             false
         }
 
         if (isBootEnabled) {
             viewModel.loadMgrsFromPrefs()
-            viewModel.startMockLocationLoop()
+            val mgrsInput = viewModel.mgrsCoordinates.value
+            viewModel.startMockLocationLoop(mgrsInput)
             prefs.edit().putBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, false).apply()
-
             viewModel.appendLog("boot_location_enabled tika automātiski izslēgts pēc starta.")
         }
         viewModel.appendLog("boot_location_enabled = $isBootEnabled")
 
         setContent {
             TacticFakeGPSTheme {
-                val mgrs by viewModel.mgrsCoordinates.collectAsState()
                 val log by viewModel.logText.collectAsState()
 
                 MgrsInputScreen(
-                    mgrsCoordinates = mgrs,
                     logText = log,
                     viewModel = viewModel,
                     onMgrsEntered = { inputMgrs ->
                         viewModel.appendLog("Lietotājs ievadīja MGRS: $inputMgrs")
                         viewModel.updateMgrsCoordinatesIfEnabled(inputMgrs)
-                        viewModel.saveMgrsToPrefs(inputMgrs)
-                        viewModel.startMockLocationLoop()
+                        viewModel.startMockLocationLoop(inputMgrs)
                     },
                     onToggleBootChanged = { isChecked ->
                         viewModel.appendLog("Sāknēšana: $isChecked")

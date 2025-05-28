@@ -12,28 +12,18 @@ import androidx.compose.ui.graphics.Color
 
 @Composable
 fun MgrsInputScreen(
-    mgrsCoordinates: String,
     logText: String,
     viewModel: LocationViewModel,
     onMgrsEntered: (String) -> Unit,
     onToggleBootChanged: (Boolean) -> Unit
 ) {
-    var input by remember { mutableStateOf("") }
+    val input by viewModel.mgrsCoordinates.collectAsState()
     var toggleState by remember { mutableStateOf(false) }
 
-    LaunchedEffect(mgrsCoordinates) {
-        if (mgrsCoordinates != input) {
-            input = mgrsCoordinates
-        }
-    }
-
-    var isBootEnabled by remember { mutableStateOf(viewModel.isBootEnabled()) }
+    val isBootEnabled by remember { mutableStateOf(viewModel.isBootEnabled()) }
     val mgrsRegex = Regex("""^(?:[1-9]|[1-5][0-9]|60)[C-HJ-NP-X][A-HJ-NP-Z]{2}[0-9]{10}$""")
     val isInputValid = input.matches(mgrsRegex)
-    val disabledContainerColor = Color(0xFFCCCCCC)
-    val disabledContentColor = Color(0xFF666666)
 
-    // Ja ievade kļūst nederīga, atslēdz toggle
     LaunchedEffect(isInputValid) {
         if (!isInputValid && toggleState) {
             toggleState = false
@@ -46,11 +36,9 @@ fun MgrsInputScreen(
             .padding(16.dp)
             .fillMaxSize()
     ) {
-        Text(
-            text = "MGRS koordināšu ievade un lokācijas simulācija",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+        Text("MGRS koordināšu ievade un lokācijas simulācija", style = MaterialTheme.typography.titleLarge)
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
             value = input,
@@ -58,7 +46,7 @@ fun MgrsInputScreen(
                 val filtered = newValue.uppercase()
                     .filter { it.isDigit() || it in 'A'..'Z' }
                     .take(15)
-                input = filtered
+                viewModel.updateMgrsCoordinatesManually(filtered)
             },
             label = { Text("Ievadi MGRS koordinātes") },
             modifier = Modifier.fillMaxWidth()
@@ -88,7 +76,7 @@ fun MgrsInputScreen(
         Button(
             onClick = {
                 onMgrsEntered(input)
-                viewModel.startMockLocationLoop()
+                viewModel.startMockLocationLoop(input)
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = isInputValid
@@ -99,9 +87,7 @@ fun MgrsInputScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(
-            onClick = {
-                viewModel.disableMockLocation()
-            },
+            onClick = { viewModel.disableMockLocation() },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFD32F2F),
@@ -113,7 +99,7 @@ fun MgrsInputScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(text = "Log:")
+        Text("Log:")
 
         Card(
             modifier = Modifier
@@ -127,11 +113,7 @@ fun MgrsInputScreen(
                     .padding(12.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    text = logText,
-                    style = MaterialTheme.typography.bodySmall,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(logText, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

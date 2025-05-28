@@ -34,13 +34,14 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     fun saveMgrsToPrefs(mgrs: String) {
-        prefs.edit().putString(PrefKeys.PREF_BOOT_LOCATION_ENABLED, mgrs).apply()
+        prefs.edit().putString(PrefKeys.PREF_MGRS_COORDINATES, mgrs).apply()
         appendLog("Saglabātas koordinātas: $mgrs")
     }
 
     fun loadMgrsFromPrefs() {
         appendLog("loadMgrsFromPrefs()")
         val savedMgrs = prefs.getString(PrefKeys.PREF_MGRS_COORDINATES, null)
+        appendLog("Saglabātās koordinātas!!!!: $savedMgrs")
         if (savedMgrs != null) {
             viewModelScope.launch {
                 _mgrsCoordinates.emit(savedMgrs)
@@ -108,19 +109,25 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
     }
 
     @SuppressLint("MissingPermission")
-    fun startMockLocationLoop() {
-        if (!isDebuggable) {
-            appendLog("Mock pieejams tikai debug buildā.")
+    fun startMockLocationLoop(mgrsInput: String) {
+        val mgrs = mgrsInput.trim()
+        if (mgrs.isEmpty()) {
+            appendLog("MGRS vērtība ir tukša — pārbaudi ievadi.")
             return
         }
 
-
-        val mgrs = lastMgrs ?: run {
-            appendLog("Nav MGRS ievades.")
+        val lat: Double
+        val lon: Double
+        try {
+            val point = MGRS.parse(mgrs).toPoint()
+            lat = point.y
+            lon = point.x
+        } catch (e: Exception) {
+            appendLog("MGRS parse kļūda: ${e.message}")
             return
         }
 
-        val (lat, lon) = MGRS.parse(mgrs).toPoint().let { it.y to it.x }
+        lastMgrs = mgrs
 
         try {
             fusedLocationClient.setMockMode(true)
@@ -153,6 +160,7 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         }
     }
 
+
     fun stopMockLocationLoop() {
         mockJob?.cancel()
         mockJob = null
@@ -184,16 +192,22 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
     }
 
     fun setBootLocationEnabled(enabled: Boolean) {
+        val currentMgrs = mgrsCoordinates.value
+        appendLog("Ievadītās koordinātes: $currentMgrs")
+
         prefs.edit().putBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, enabled).apply()
         appendLog("boot_location_enabled tika iestatīts uz $enabled")
-
         if (!enabled) {
             stopMockLocationLoop()
             prefs.edit().remove(PrefKeys.PREF_MGRS_COORDINATES).apply()
             viewModelScope.launch {
-                _mgrsCoordinates.emit("")
-                appendLog("MGRS koordinātes tika izdzēstas, jo boot_location ir izslēgts")
+                //_mgrsCoordinates.emit("")
+                appendLog("MGRS koordinātes tika izdzēstas, jo boot_location_enabled ir izslēgts")
             }
+        }
+        else {
+            saveMgrsToPrefs(currentMgrs)
+            appendLog("MGRS koordinātes tika saglabātas, jo boot_location_enabled ir ieslēgts")
         }
     }
 
@@ -217,6 +231,12 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             }
         } else {
             appendLog("MGRS koordinātes netika atjaunotas, jo boot_location ir izslēgts")
+        }
+    }
+
+    fun updateMgrsCoordinatesManually(input: String) {
+        viewModelScope.launch {
+            _mgrsCoordinates.emit(input)
         }
     }
 }
