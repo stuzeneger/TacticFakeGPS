@@ -43,12 +43,19 @@ class MainActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences("tactic_prefs", Context.MODE_PRIVATE)
 
-        val isBootEnabled = prefs.getBoolean("boot_location_enabled", false)
+        val isBootEnabled = try {
+            prefs.getBoolean("boot_location_enabled", false)
+        } catch (e: ClassCastException) {
+            // Ja iepriekš glabājās kā String, dzēšam šo kļūdaino vērtību
+            prefs.edit().remove("boot_location_enabled").apply()
+            false
+        }
+
         if (isBootEnabled) {
             viewModel.loadMgrsFromPrefs()
             viewModel.startMockLocationLoop()
             prefs.edit().putBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, false).apply()
-            
+
             viewModel.appendLog("boot_location_enabled tika automātiski izslēgts pēc starta.")
         }
         viewModel.appendLog("boot_location_enabled = $isBootEnabled")
