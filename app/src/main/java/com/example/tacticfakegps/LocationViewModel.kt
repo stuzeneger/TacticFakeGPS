@@ -10,7 +10,6 @@ import android.location.LocationManager
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.location.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +17,6 @@ import mil.nga.mgrs.MGRS
 
 class LocationViewModel(private val application: Application) : AndroidViewModel(application) {
 
-    private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(application)
     private val prefs = application.getSharedPreferences("tactic_prefs", Context.MODE_PRIVATE)
     private val _mgrsCoordinates = MutableStateFlow("")
     val mgrsCoordinates: StateFlow<String> = _mgrsCoordinates
@@ -39,9 +37,9 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
     }
 
     fun loadMgrsFromPrefs() {
-        appendLog("loadMgrsFromPrefs()")
+        appendLog("Ielādē aplikācijas iestatījumus")
         val savedMgrs = prefs.getString(PrefKeys.PREF_MGRS_COORDINATES, null)
-        appendLog("Saglabātās koordinātas!!!!: $savedMgrs")
+        appendLog("Saglabātās koordinātas: $savedMgrs")
         if (savedMgrs != null) {
             viewModelScope.launch {
                 _mgrsCoordinates.emit(savedMgrs)
@@ -56,19 +54,6 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             val updated = if (_logText.value.isBlank()) line else "${_logText.value}\n$line"
             _logText.emit(updated)
         }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun sendMockLocationViaFusedClient(lat: Double, lon: Double) {
-        val mockLoc = Location("gps").apply {
-            latitude = lat
-            longitude = lon
-            accuracy = 1f
-            time = System.currentTimeMillis()
-            elapsedRealtimeNanos = System.nanoTime()
-        }
-        fusedLocationClient.setMockLocation(mockLoc)
-        appendLog("Nosūtīts mock ar FusedLocationClient: LAT=$lat, LON=$lon")
     }
 
     @SuppressLint("MissingPermission")
@@ -98,9 +83,8 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
                 elapsedRealtimeNanos = System.nanoTime()
             }
             locationManager.setTestProviderLocation(providerName, mockLocation)
-            appendLog("Nosūtīts mock ar LocationManager: LAT=$lat, LON=$lon")
         } catch (e: Exception) {
-            appendLog("Neizdevās nosūtīt mock ar LocationManager: ${e.message}")
+            appendLog("Neizdevās nosūtīt lokācijas simulāciju ar LocationManager: ${e.message}")
             if (e.message?.contains("mock", ignoreCase = true) == true) {
                 appendLog("Atver Developer Settings, jo nav izvēlēta mock aplikācija.")
                 openDeveloperSettings()
@@ -114,6 +98,8 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         if (mgrs.isEmpty()) {
             appendLog("MGRS vērtība ir tukša — pārbaudi ievadi.")
             return
+        } else {
+            saveMgrsToPrefs(mgrs)
         }
 
         val lat: Double
@@ -123,22 +109,21 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             lat = point.y
             lon = point.x
         } catch (e: Exception) {
-            appendLog("MGRS parse kļūda: ${e.message}")
+            appendLog("MGRS formāta kļūda: ${e.message}")
             return
         }
 
         lastMgrs = mgrs
 
         try {
-            fusedLocationClient.setMockMode(true)
             isMockRunning = true
-            appendLog("Mock režīms ieslēgts.")
+            appendLog("Lokācijas simulācija ieslēgta")
         } catch (e: SecurityException) {
-            appendLog("Mock nav atļauts šai lietotnei! Iespējams, tā nav norādīta kā 'Mock location app'.")
+            appendLog("Lokācijas simulācija nav atļautq šai lietotnei! Iespējams, tā nav norādīta kā 'Mock location app'.")
             openDeveloperSettings()
             return
         } catch (e: Exception) {
-            appendLog("Neizdevās ieslēgt mock režīmu: ${e.message}")
+            appendLog("Neizdevās ieslēgt lokācijas simulāciju: ${e.message}")
             return
         }
 
@@ -146,13 +131,12 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         mockJob = viewModelScope.launch {
             while (isActive) {
                 try {
-                    sendMockLocationViaFusedClient(lat, lon)
                     startMockLocationViaLocationManager(lat, lon)
                 } catch (e: SecurityException) {
-                    appendLog("Neatļauts nosūtīt mock lokāciju: ${e.message}")
+                    appendLog("Neatļauts nosūtīt lokācijas simulācija: ${e.message}")
                     cancel()
                 } catch (e: Exception) {
-                    appendLog("Mock kļūda: ${e.message}")
+                    appendLog("Lokācijas simulācijas kļūda: ${e.message}")
                     cancel()
                 }
                 delay(AppSettings.mockIntervalMs)
@@ -160,18 +144,16 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         }
     }
 
-
     fun stopMockLocationLoop() {
         mockJob?.cancel()
         mockJob = null
 
         if (isDebuggable) {
             try {
-                fusedLocationClient.setMockMode(false)
                 isMockRunning = false
-                appendLog("Mock režīms izslēgts.")
+                appendLog("Lokācijas simulācija izsleģta")
             } catch (e: Exception) {
-                appendLog("Neizdevās izslēgt mock režīmu: ${e.message}")
+                appendLog("Neizdevās izslēgt lokacijas simulācijas režīmu: ${e.message}")
             }
         }
     }
@@ -180,11 +162,6 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         application.startActivity(intent)
-    }
-
-    fun bootDeviceLocation() {
-        prefs.edit().putBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, true).apply()
-        appendLog("Starts pie sāknēšanas iestatīts")
     }
 
     fun isBootEnabled(): Boolean {
@@ -196,31 +173,18 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         appendLog("Ievadītās koordinātes: $currentMgrs")
 
         prefs.edit().putBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, enabled).apply()
-        appendLog("boot_location_enabled tika iestatīts uz $enabled")
+        appendLog("Lokācijas simulācija tika iestatīta uz $enabled")
         if (!enabled) {
             stopMockLocationLoop()
             prefs.edit().remove(PrefKeys.PREF_MGRS_COORDINATES).apply()
             viewModelScope.launch {
-                //_mgrsCoordinates.emit("")
-                appendLog("MGRS koordinātes tika izdzēstas, jo boot_location_enabled ir izslēgts")
+                appendLog("MGRS koordinātes tika izdzēstas, jo lokācijas simulācija ir izslēgta")
             }
         }
         else {
             saveMgrsToPrefs(currentMgrs)
-            appendLog("MGRS koordinātes tika saglabātas, jo boot_location_enabled ir ieslēgts")
+            appendLog("MGRS koordinātes tika saglabātas, jo lokācijas simulācija ir ieslēgts")
         }
-    }
-
-
-    fun toggleBootLocation() {
-        val current = isBootEnabled()
-        setBootLocationEnabled(!current)
-    }
-
-    fun disableMockLocation() {
-        appendLog("Izslēgt lokācijas simulāciju")
-        setBootLocationEnabled(false)
-        stopMockLocationLoop()
     }
 
     fun updateMgrsCoordinatesIfEnabled(newCoords: String) {
@@ -238,5 +202,16 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         viewModelScope.launch {
             _mgrsCoordinates.emit(input)
         }
+
+    fun saveMgrsToPrefs(mgrs: String) {
+            prefs.edit().putString(PrefKeys.PREF_MGRS_COORDINATES, mgrs).apply()
+            appendLog("Saglabātas koordinātas: $mgrs")
+        }
+    }
+
+    fun disableMockLocation() {
+        appendLog("Izslēgt lokācijas simulāciju")
+        setBootLocationEnabled(false)
+        stopMockLocationLoop()
     }
 }

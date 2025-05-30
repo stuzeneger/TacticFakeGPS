@@ -3,11 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.tacticfakegps">
 
-    <!-- Atļaujas GPS atrašanās vietas iegūšanai -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- Atļauja mock location -->
     <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" tools:ignore="MockLocation" />
 
     <application
@@ -20,6 +15,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.TacticFakeGPS"
         tools:targetApi="31">
+
+        <!-- Google Maps API Key jāieliek šeit -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="@string/google_maps_key" />
 
         <activity
             android:name=".MainActivity"

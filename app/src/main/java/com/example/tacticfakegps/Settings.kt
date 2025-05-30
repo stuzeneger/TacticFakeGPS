@@ -5,7 +5,6 @@ import android.content.pm.ApplicationInfo
 
 object AppSettings {
 
-    // Sākotnējais mock intervāls (milisekundēs)
     var mockIntervalMs: Long = 5000L
 
     // Debug režīma pārbaude
