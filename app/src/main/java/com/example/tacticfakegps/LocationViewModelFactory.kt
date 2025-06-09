@@ -13,3 +13,4 @@ class LocationViewModelFactory(private val application: Application) : ViewModel
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+

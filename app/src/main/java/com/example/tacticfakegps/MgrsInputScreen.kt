@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import com.example.tacticfakegps.ui.theme.*
 import kotlinx.coroutines.delay
@@ -25,7 +26,7 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
-import androidx.core.content.ContextCompat
+import android.util.Log
 
 object MapRef {
     var mapView: MapView? = null
@@ -37,8 +38,9 @@ fun MgrsInputScreen(
     viewModel: LocationViewModel,
     onMgrsEntered: (String) -> Unit
 ) {
-    val context = LocalContext.current
+    val context: Context = LocalContext.current
     val view = LocalView.current
+
     LaunchedEffect(Unit) {
         Configuration.getInstance().load(
             context,
@@ -47,12 +49,17 @@ fun MgrsInputScreen(
     }
 
     val input by viewModel.mgrsCoordinates.collectAsState()
-    var toggleState by remember { mutableStateOf(false) }
     val isInputValid = viewModel.isValidMgrs(input)
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabTitles = listOf("Karte", "Darbības")
     var selectedPin by remember { mutableStateOf<GeoPoint?>(null) }
-    val mockEnabled by viewModel.mockEnabled.collectAsState()
+    var toggleState by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.mockEnabled.collect { enabled ->
+            toggleState = enabled
+        }
+    }
 
     LaunchedEffect(selectedTabIndex) {
         if (selectedTabIndex == 0) {
@@ -60,7 +67,6 @@ fun MgrsInputScreen(
                 delay(100)
             }
             if (isInputValid) {
-                viewModel.appendLog("Kartes komponentes atjaunošana trigerēta pēc tab maiņas")
                 viewModel.centerMapOnMgrsPoint(input)
             }
         }
@@ -84,7 +90,7 @@ fun MgrsInputScreen(
                     .filter { it.isDigit() || it in 'A'..'Z' }
                     .take(15)
                 viewModel.updateMgrsCoordinatesManually(filtered)
-                hideKeyboard(context, view.windowToken)
+            //    hideKeyboard(context, view.windowToken)
             },
             label = { Text("Ievadi MGRS koordinātes") },
             modifier = Modifier.fillMaxWidth()
@@ -106,12 +112,15 @@ fun MgrsInputScreen(
             )
 
             Switch(
-                checked = mockEnabled,
+                checked = toggleState,
                 onCheckedChange = { newState ->
-                    toggleState = newState
                     hideKeyboard(context, view.windowToken)
-                    if (newState) viewModel.startMockLocationLoop(input)
-                    else viewModel.disableMockLocation()
+                    toggleState = newState
+                    if (newState) {
+                        viewModel.startMockLocationLoop()
+                    } else {
+                        viewModel.disableMockLocation()
+                    }
                 },
                 enabled = isInputValid,
                 colors = SwitchDefaults.colors(
@@ -198,6 +207,7 @@ fun MgrsInputScreen(
                     )
                 }
             }
+
             1 -> Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -223,10 +233,15 @@ fun createMapViewWithPinListener(
     context: Context,
     onPinSelected: (GeoPoint) -> Unit
 ): MapView {
-    val mapView = MapView(context).apply {
+    val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+    val mapView:MyCustomMapView = MyCustomMapView(context).apply {
         setTileSource(TileSourceFactory.MAPNIK)
         setMultiTouchControls(true)
-        controller.setZoom(15.0)
+
+        val zoom = prefs.getFloat(PrefKeys.PREF_ZOOM_LEVEL, 8.0f).toDouble()
+        Log.d("ZOOM_PREF", "Loaded zoom level from prefs on start: $zoom")
+
+        controller.setZoom(zoom)
         controller.setCenter(GeoPoint(56.9496, 24.1052))
         MapRef.mapView = this
     }
@@ -235,18 +250,22 @@ fun createMapViewWithPinListener(
         context,
         object : GestureDetector.SimpleOnGestureListener() {
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                val geoPoint = mapView.projection.fromPixels(
-                    e.x.toInt(), e.y.toInt()
-                ) as GeoPoint
+                val geoPoint = mapView.projection.fromPixels(e.x.toInt(), e.y.toInt()) as GeoPoint
                 onPinSelected(geoPoint)
+                mapView.performClick()
                 return true
             }
         }
     )
 
-    mapView.setOnTouchListener { _, event ->
-        gestureDetector.onTouchEvent(event)
-        false
+    mapView.setOnTouchListener { v, event ->
+        val handled = gestureDetector.onTouchEvent(event)
+        if (handled) {
+            v.performClick()
+            true
+        } else {
+            false
+        }
     }
 
     return mapView

@@ -19,14 +19,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 class LocationViewModel(private val application: Application) : AndroidViewModel(application) {
 
-    private val prefs = application.getSharedPreferences("tactic_prefs", Context.MODE_PRIVATE)
-    private var developerSettingsOpenCount = 0
+    private val prefs = application.getSharedPreferences(AppSettings.settingsName, Context.MODE_PRIVATE)
     private val _mgrsCoordinates = MutableStateFlow("")
     val mgrsCoordinates: StateFlow<String> = _mgrsCoordinates
     private val _logText = MutableStateFlow("")
     val logText: StateFlow<String> = _logText
     private var mockJob: Job? = null
-    private var lastMgrs: String? = null
     private var isMockRunning = false
     private val _hideKeyboardEvent = MutableSharedFlow<Unit>()
     private val _mockEnabled = MutableStateFlow(isBootEnabled())
@@ -43,6 +41,7 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
     fun loadMgrsFromPrefs() {
         val mgrs = prefs.getString(PrefKeys.PREF_MGRS_COORDINATES, "") ?: ""
         appendLog("Saglabātās koordinātas: $mgrs")
+
         if (isValidMgrs(mgrs)) {
             viewModelScope.launch {
                 _mgrsCoordinates.emit(mgrs)
@@ -60,7 +59,7 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
     }
 
     @SuppressLint("MissingPermission")
-    fun startMockLocationViaLocationManager(lat: Double, lon: Double) {
+    fun startMockLocationViaLocationManager() {
         val locationManager = application.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val providerName = LocationManager.GPS_PROVIDER
 
@@ -72,83 +71,64 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             locationManager.addTestProvider(
                 providerName,
                 false, false, false, false,
-                true, true, true,
+                true, true,
+                true,
                 android.location.Criteria.POWER_LOW,
                 android.location.Criteria.ACCURACY_FINE
             )
+
             locationManager.setTestProviderEnabled(providerName, true)
 
+            val mgrs = _mgrsCoordinates.value
+            val point = try {
+                MGRS.parse(mgrs).toPoint()
+            } catch (e: Exception) {
+                appendLog("MGRS formāta kļūda: ${e.message}")
+                return
+            }
+
+            val randomShiftProbability = AppSettings.randomShiftProbability
+            val shiftLat = AppSettings.shiftLat
+            val shiftLon = AppSettings.shiftLon
+
+            var fakeLatitude = point.y
+            var fakeLongitude = point.x
+
+            if (Math.random() < randomShiftProbability) {
+                when ((1..4).random()) {
+                    1 -> fakeLatitude += shiftLat
+                    2 -> fakeLatitude -= shiftLat
+                    3 -> fakeLongitude += shiftLon
+                    4 -> fakeLongitude -= shiftLon
+                }
+            }
+
             val mockLocation = Location(providerName).apply {
-                latitude = lat
-                longitude = lon
+                latitude = fakeLatitude
+                longitude = fakeLongitude
                 accuracy = 1f
                 time = System.currentTimeMillis()
                 elapsedRealtimeNanos = System.nanoTime()
             }
+
             locationManager.setTestProviderLocation(providerName, mockLocation)
         } catch (e: Exception) {
             appendLog("Neizdevās nosūtīt lokācijas simulāciju ar LocationManager: ${e.message}")
             if (e.message?.contains("mock", ignoreCase = true) == true) {
                 appendLog("Atver Developer Settings, jo nav izvēlēta mock aplikācija.")
-                developerSettingsOpenCount++
-                if (developerSettingsOpenCount > 1) {
-                    appendLog("Developer Settings tika atvērts vairāk nekā 1 reizi. Simulācija tiek pārtraukta.")
-                    disableMockLocation()
-                    return
-                }
-
                 openDeveloperSettings()
             }
         }
     }
 
     @SuppressLint("MissingPermission")
-    fun startMockLocationLoop(mgrsInput: String) {
-        val mgrs = mgrsInput.trim()
-        if (mgrs.isEmpty()) {
-            appendLog("MGRS vērtība ir tukša — pārbaudi ievadi.")
-            return
-        } else {
-            saveMgrsToPrefs(mgrs)
-        }
-
-        val lat: Double
-        val lon: Double
-        try {
-            val point = MGRS.parse(mgrs).toPoint()
-            lat = point.y
-            lon = point.x
-        } catch (e: Exception) {
-            appendLog("MGRS formāta kļūda: ${e.message}")
-            return
-        }
-
-        lastMgrs = mgrs
-
-        try {
-            isMockRunning = true
-            appendLog("Lokācijas simulācija ieslēgta")
-        } catch (e: SecurityException) {
-            appendLog("Lokācijas simulācija nav atļautq šai lietotnei! Iespējams, tā nav norādīta kā 'Mock location app'.")
-            openDeveloperSettings()
-            return
-        } catch (e: Exception) {
-            appendLog("Neizdevās ieslēgt lokācijas simulāciju: ${e.message}")
-            return
-        }
-
+    fun startMockLocationLoop() {
         mockJob?.cancel()
         mockJob = viewModelScope.launch {
+            isMockRunning = true
+            appendLog("Lokācijas simulācija ieslēgta")
             while (isActive) {
-                try {
-                    startMockLocationViaLocationManager(lat, lon)
-                } catch (e: SecurityException) {
-                    appendLog("Neatļauts nosūtīt lokācijas simulācija: ${e.message}")
-                    cancel()
-                } catch (e: Exception) {
-                    appendLog("Lokācijas simulācijas kļūda: ${e.message}")
-                    cancel()
-                }
+                startMockLocationViaLocationManager()
                 delay(AppSettings.mockIntervalMs)
             }
         }
@@ -187,10 +167,6 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         appendLog("Lokācijas simulācija tika iestatīta uz $enabled")
         if (!enabled) {
             stopMockLocationLoop()
-            //prefs.edit().remove(PrefKeys.PREF_MGRS_COORDINATES).apply()
-           // viewModelScope.launch {
-             //   appendLog("MGRS koordinātes tika izdzēstas, jo lokācijas simulācija ir izslēgta")
-            //}
         }
         else {
             saveMgrsToPrefs(mgrs)
@@ -198,34 +174,34 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         }
     }
 
+    fun disableMockLocation() {
+        appendLog("Izslēgt lokācijas simulāciju")
+        setBootLocationEnabled(false)
+        stopMockLocationLoop()
+    }
+
+    fun updateCoordinatesFromPin(latitude: Double, longitude: Double) {
+            val mgrs = MGRS.from(latitude, longitude).toString()
+            viewModelScope.launch {
+                _mgrsCoordinates.emit(mgrs)
+                saveMgrsToPrefs(mgrs)
+            }
+        }
+
     fun updateMgrsCoordinatesManually(mgrs: String) {
         viewModelScope.launch {
             _mgrsCoordinates.emit(mgrs)
-            if(isValidMgrs(mgrs))
-            {
+            if (isValidMgrs(mgrs)) {
                 centerMapOnMgrsPoint(mgrs)
                 saveMgrsToPrefs(mgrs)
             }
         }
     }
 
-    fun disableMockLocation() {
-        appendLog("Izslēgt lokācijas simulāciju")
-        setBootLocationEnabled(false)
-        stopMockLocationLoop()
-        developerSettingsOpenCount = 0
-    }
-
-    fun updateCoordinatesFromPin(latitude: Double, longitude: Double) {
-        val mgrs = MGRS.from(latitude, longitude).toString()
-        _mgrsCoordinates.value = mgrs
-        saveMgrsToPrefs(mgrs)
-    }
 
     private fun saveMgrsToPrefs(mgrs: String) {
         prefs.edit().putString(PrefKeys.PREF_MGRS_COORDINATES, mgrs).apply()
         centerMapOnMgrsPoint(mgrs)
-        appendLog("Saglabā koordinātas: $mgrs")
     }
 
     fun centerMapOnMgrsPoint(mgrs: String) {
@@ -243,10 +219,9 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             }
             return
         }
-        map.overlays.clear()
-        map.controller.setZoom(15.0)
-        map.controller.setCenter(geoPoint)
         val marker = createPilotMarker(map, geoPoint)
+        map.overlays.clear()
+        map.controller.setCenter(geoPoint)
         map.overlays.add(marker)
         map.invalidate()
         viewModelScope.launch {

@@ -6,28 +6,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.ViewModelProvider
 import com.example.tacticfakegps.ui.theme.TacticFakeGPSTheme
-import org.osmdroid.views.MapView
+import androidx.activity.viewModels
 
 class MainActivity : ComponentActivity() {
-
-    object MapHolder {
-        var mapView: MapView? = null
-    }
 
     private lateinit var viewModel: LocationViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        viewModel = ViewModelProvider(
-            this,
+        val viewModel: LocationViewModel by viewModels {
             LocationViewModelFactory(application)
-        ).get(LocationViewModel::class.java)
+        }
 
-        // Ielādē saglabātās koordinātes uz startu
         viewModel.loadMgrsFromPrefs()
 
         setContent {
@@ -40,7 +32,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.appendLog("Lietotājs ievadīja MGRS: $inputMgrs")
                         viewModel.updateMgrsCoordinatesManually(inputMgrs)
                         if (viewModel.isBootEnabled()) {
-                            viewModel.startMockLocationLoop(inputMgrs)
+                            viewModel.startMockLocationLoop()
                         }
                     }
                 )
