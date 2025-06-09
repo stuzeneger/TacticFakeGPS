@@ -1,5 +1,9 @@
 package com.example.tacticfakegps
 
+import android.content.Context
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,10 +12,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.preference.PreferenceManager
 import com.example.tacticfakegps.ui.theme.*
+import kotlinx.coroutines.delay
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import androidx.core.content.ContextCompat
+
+object MapRef {
+    var mapView: MapView? = null
+}
 
 @Composable
 fun MgrsInputScreen(
@@ -19,18 +37,32 @@ fun MgrsInputScreen(
     viewModel: LocationViewModel,
     onMgrsEntered: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    LaunchedEffect(Unit) {
+        Configuration.getInstance().load(
+            context,
+            PreferenceManager.getDefaultSharedPreferences(context)
+        )
+    }
+
     val input by viewModel.mgrsCoordinates.collectAsState()
     var toggleState by remember { mutableStateOf(false) }
-    val mgrsRegex = Regex("""^(?:[1-9]|[1-5][0-9]|60)[C-HJ-NP-X][A-HJ-NP-Z]{2}[0-9]{10}$""")
-    val isInputValid = input.matches(mgrsRegex)
-    var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabTitles = listOf("Karte", "Logošana")
+    val isInputValid = viewModel.isValidMgrs(input)
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabTitles = listOf("Karte", "Darbības")
+    var selectedPin by remember { mutableStateOf<GeoPoint?>(null) }
+    val mockEnabled by viewModel.mockEnabled.collectAsState()
 
-    LaunchedEffect(toggleState) {
-        if (toggleState) {
-            viewModel.startMockLocationLoop(input)
-        } else {
-            viewModel.disableMockLocation()
+    LaunchedEffect(selectedTabIndex) {
+        if (selectedTabIndex == 0) {
+            while (MapRef.mapView == null) {
+                delay(100)
+            }
+            if (isInputValid) {
+                viewModel.appendLog("Kartes komponentes atjaunošana trigerēta pēc tab maiņas")
+                viewModel.centerMapOnMgrsPoint(input)
+            }
         }
     }
 
@@ -40,10 +72,9 @@ fun MgrsInputScreen(
             .fillMaxSize()
     ) {
         Text(
-            "MGRS koordināšu ievade un lokācijas simulācija",
+            "Pilota lokācijas vietas simulācija",
             style = MaterialTheme.typography.titleLarge
         )
-
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
@@ -53,6 +84,7 @@ fun MgrsInputScreen(
                     .filter { it.isDigit() || it in 'A'..'Z' }
                     .take(15)
                 viewModel.updateMgrsCoordinatesManually(filtered)
+                hideKeyboard(context, view.windowToken)
             },
             label = { Text("Ievadi MGRS koordinātes") },
             modifier = Modifier.fillMaxWidth()
@@ -69,12 +101,18 @@ fun MgrsInputScreen(
                     !isInputValid -> "Nepilnīgas koordinātes"
                     toggleState -> "Lokācijas simulācija ieslēgta"
                     else -> "Lokācijas simulācija izslēgta"
-                }, modifier = Modifier.weight(1f)
+                },
+                modifier = Modifier.weight(1f)
             )
 
             Switch(
-                checked = toggleState,
-                onCheckedChange = { toggleState = it },
+                checked = mockEnabled,
+                onCheckedChange = { newState ->
+                    toggleState = newState
+                    hideKeyboard(context, view.windowToken)
+                    if (newState) viewModel.startMockLocationLoop(input)
+                    else viewModel.disableMockLocation()
+                },
                 enabled = isInputValid,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = ToggleGreen,
@@ -98,28 +136,26 @@ fun MgrsInputScreen(
             selectedTabIndex = selectedTabIndex,
             modifier = Modifier.fillMaxWidth(),
             containerColor = Color.Transparent,
-            indicator = { tabPositions ->
-                Box(
-                    Modifier
-                        .tabIndicatorOffset(tabPositions[selectedTabIndex])
-                        .height(0.dp)
-                )
-            },
+            indicator = {},
             divider = {}
         ) {
             tabTitles.forEachIndexed { index, title ->
                 val isSelected = selectedTabIndex == index
                 Tab(
                     selected = isSelected,
-                    onClick = { selectedTabIndex = index },
+                    onClick = {
+                        hideKeyboard(context, view.windowToken)
+                        selectedTabIndex = index
+                    },
                     text = {
                         Text(
                             text = title,
                             color = if (isSelected) Color.White else ToggleGreen
                         )
                     },
-                    modifier = Modifier
-                        .background(if (isSelected) ToggleGreen else ToggleGreenLight)
+                    modifier = Modifier.background(
+                        if (isSelected) ToggleGreen else ToggleGreenLight
+                    )
                 )
             }
         }
@@ -127,34 +163,105 @@ fun MgrsInputScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         when (selectedTabIndex) {
-            0 -> {
+            0 -> Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp)
+                    .weight(1f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 120.dp)
-                        .weight(1f)
+                        .fillMaxSize()
+                        .padding(8.dp)
                 ) {
-                    // TODO: ŠEIT jāievieto karte (MapLibreView)
+                    AndroidView(
+                        factory = { ctx ->
+                            createMapViewWithPinListener(ctx) { geoPoint ->
+                                selectedPin = geoPoint
+                                viewModel.updateCoordinatesFromPin(
+                                    geoPoint.longitude,
+                                    geoPoint.latitude
+                                )
+                            }
+                        },
+                        update = { mapView ->
+                            mapView.overlays.clear()
+                            selectedPin?.let { geoPoint ->
+                                val marker = createPilotMarker(mapView, geoPoint)
+                                mapView.overlays.add(marker)
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
-
-            1 -> {
-                Card(
+            1 -> Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp)
+                    .weight(1f),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 120.dp)
-                        .weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        .padding(12.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        Text(logText, style = MaterialTheme.typography.bodySmall)
-                    }
+                    Text(logText, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
+}
+
+fun createMapViewWithPinListener(
+    context: Context,
+    onPinSelected: (GeoPoint) -> Unit
+): MapView {
+    val mapView = MapView(context).apply {
+        setTileSource(TileSourceFactory.MAPNIK)
+        setMultiTouchControls(true)
+        controller.setZoom(15.0)
+        controller.setCenter(GeoPoint(56.9496, 24.1052))
+        MapRef.mapView = this
+    }
+
+    val gestureDetector = GestureDetector(
+        context,
+        object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                val geoPoint = mapView.projection.fromPixels(
+                    e.x.toInt(), e.y.toInt()
+                ) as GeoPoint
+                onPinSelected(geoPoint)
+                return true
+            }
+        }
+    )
+
+    mapView.setOnTouchListener { _, event ->
+        gestureDetector.onTouchEvent(event)
+        false
+    }
+
+    return mapView
+}
+
+fun createPilotMarker(mapView: MapView, position: GeoPoint): Marker {
+    return Marker(mapView).apply {
+        this.position = position
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        infoWindow = null
+        icon = ContextCompat.getDrawable(mapView.context, R.drawable.ic_pin_pilot)
+    }
+}
+
+fun hideKeyboard(context: Context, windowToken: android.os.IBinder) {
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    imm.hideSoftInputFromWindow(windowToken, 0)
 }

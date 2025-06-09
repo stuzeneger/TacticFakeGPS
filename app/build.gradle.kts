@@ -74,6 +74,14 @@ dependencies {
     // Lifecycle ViewModel Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
+    implementation ("org.osmdroid:osmdroid-android:6.1.14")
+    //implementation ("org.osmdroid:osmdroid-mbtiles:6.1.14")
+
+    implementation ("androidx.compose.material3:material3:1.2.1")
+
+    implementation ("androidx.preference:preference:1.2.0")
+
+
     // Testēšanas bibliotēkas
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
