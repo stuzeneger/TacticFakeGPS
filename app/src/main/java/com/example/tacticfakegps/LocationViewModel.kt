@@ -74,6 +74,8 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
                 locationManager.removeTestProvider(providerName)
             } catch (_: Exception) {}
 
+
+            @Suppress("DEPRECATION")
             locationManager.addTestProvider(
                 providerName,
                 false, false, false, false,
@@ -96,7 +98,6 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             val randomShiftProbability = AppSettings.RANDOM_SHIFT_PROBABILITY
             val shiftLat = AppSettings.SHIFT_LAT
             val shiftLon = AppSettings.SHIFT_LON
-
             var fakeLatitude = point.y
             var fakeLongitude = point.x
 

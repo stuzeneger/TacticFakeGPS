@@ -26,6 +26,8 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.unit.dp
 
 object MapRef {
     var mapView: MapView? = null
@@ -123,19 +125,10 @@ fun InputScreen(
                     }
                 },
                 enabled = isInputValid,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = ToggleGreen,
-                    checkedTrackColor = ToggleGreenLight,
-                    uncheckedThumbColor = ToggleRed,
-                    uncheckedTrackColor = ToggleRedLight,
-                    uncheckedBorderColor = ToggleRedBorderLight,
-                    disabledCheckedThumbColor = ToggleDisabledThumb,
-                    disabledCheckedTrackColor = ToggleDisabledTrack,
-                    disabledCheckedBorderColor = ToggleDisabledBorder,
-                    disabledUncheckedThumbColor = ToggleDisabledThumb,
-                    disabledUncheckedTrackColor = ToggleDisabledTrack,
-                    disabledUncheckedBorderColor = ToggleDisabledBorder
-                )
+                colors = mySwitchColors(),
+                modifier = Modifier
+                    .scale(1.5f)
+                    .padding(end = 16.dp),
             )
         }
 

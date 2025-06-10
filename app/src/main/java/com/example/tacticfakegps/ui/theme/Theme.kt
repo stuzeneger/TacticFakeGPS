@@ -1,8 +1,8 @@
 package com.example.tacticfakegps.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -31,12 +31,24 @@ private val LightColorScheme = lightColorScheme(
     onSurface = DarkGreen
 )
 
+@Composable
+fun mySwitchColors() = SwitchDefaults.colors(
+    checkedThumbColor = ToggleGreen,
+    checkedTrackColor = ToggleGreenLight,
+    uncheckedThumbColor = ToggleRed,
+    uncheckedTrackColor = ToggleRedLight,
+    uncheckedBorderColor = ToggleRedBorderLight,
+    disabledCheckedThumbColor = ToggleDisabledThumb,
+    disabledCheckedTrackColor = ToggleDisabledTrack,
+    disabledCheckedBorderColor = ToggleDisabledBorder,
+    disabledUncheckedThumbColor = ToggleDisabledThumb,
+    disabledUncheckedTrackColor = ToggleDisabledTrack,
+    disabledUncheckedBorderColor = ToggleDisabledBorder
+)
 
 @Composable
 fun TacticFakeGPSTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Izslēdzam dynamic color, lai netiktu mainītas krāsas Android 12+
-    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) {
