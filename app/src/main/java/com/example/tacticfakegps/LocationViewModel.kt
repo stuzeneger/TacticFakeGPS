@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 class LocationViewModel(private val application: Application) : AndroidViewModel(application) {
 
-    private val prefs = application.getSharedPreferences(AppSettings.settingsName, Context.MODE_PRIVATE)
+    private val prefs = application.getSharedPreferences(PrefKeys.PREF_APP_SETTINGS, Context.MODE_PRIVATE)
     private val _mgrsCoordinates = MutableStateFlow("")
     val mgrsCoordinates: StateFlow<String> = _mgrsCoordinates
     private val _logText = MutableStateFlow("")
@@ -40,7 +40,13 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
 
     fun loadMgrsFromPrefs() {
         val mgrs = prefs.getString(PrefKeys.PREF_MGRS_COORDINATES, "") ?: ""
-        appendLog("Saglabātās koordinātas: $mgrs")
+
+        if(mgrs.isNotEmpty())
+        {
+            appendLog("Saglabātās koordinātas: $mgrs")
+        } else{
+            appendLog("Nav saglabāto koordināšu, ko ielādēt")
+        }
 
         if (isValidMgrs(mgrs)) {
             viewModelScope.launch {
@@ -87,9 +93,9 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
                 return
             }
 
-            val randomShiftProbability = AppSettings.randomShiftProbability
-            val shiftLat = AppSettings.shiftLat
-            val shiftLon = AppSettings.shiftLon
+            val randomShiftProbability = AppSettings.RANDOM_SHIFT_PROBABILITY
+            val shiftLat = AppSettings.SHIFT_LAT
+            val shiftLon = AppSettings.SHIFT_LON
 
             var fakeLatitude = point.y
             var fakeLongitude = point.x
@@ -129,7 +135,7 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             appendLog("Lokācijas simulācija ieslēgta")
             while (isActive) {
                 startMockLocationViaLocationManager()
-                delay(AppSettings.mockIntervalMs)
+                delay(AppSettings.MOCK_INTERVAL_MS)
             }
         }
     }
@@ -158,25 +164,9 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
         return prefs.getBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, false)
     }
 
-    private fun setBootLocationEnabled(enabled: Boolean) {
-        val mgrs = mgrsCoordinates.value
-        viewModelScope.launch {
-            _mockEnabled.emit(enabled)
-        }
-        prefs.edit().putBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, enabled).apply()
-        appendLog("Lokācijas simulācija tika iestatīta uz $enabled")
-        if (!enabled) {
-            stopMockLocationLoop()
-        }
-        else {
-            saveMgrsToPrefs(mgrs)
-            appendLog("MGRS koordinātes tika saglabātas, jo lokācijas simulācija ir ieslēgta")
-        }
-    }
-
     fun disableMockLocation() {
         appendLog("Izslēgt lokācijas simulāciju")
-        setBootLocationEnabled(false)
+        prefs.edit().putBoolean(PrefKeys.PREF_BOOT_LOCATION_ENABLED, false).apply()
         stopMockLocationLoop()
     }
 
@@ -197,7 +187,6 @@ class LocationViewModel(private val application: Application) : AndroidViewModel
             }
         }
     }
-
 
     private fun saveMgrsToPrefs(mgrs: String) {
         prefs.edit().putString(PrefKeys.PREF_MGRS_COORDINATES, mgrs).apply()

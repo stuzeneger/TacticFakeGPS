@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val viewModel: LocationViewModel by viewModels {
-            LocationViewModelFactory(application)
+            ViewModelFactory(application)
         }
 
         viewModel.loadMgrsFromPrefs()
@@ -25,12 +25,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             TacticFakeGPSTheme {
                 val log by viewModel.logText.collectAsState()
-                MgrsInputScreen(
+                InputScreen(
                     logText = log,
                     viewModel = viewModel,
-                    onMgrsEntered = { inputMgrs ->
-                        viewModel.appendLog("Lietotājs ievadīja MGRS: $inputMgrs")
-                        viewModel.updateMgrsCoordinatesManually(inputMgrs)
+                    onMgrsEntered = { mgrs ->
+                        viewModel.appendLog("Lietotājs ievadīja MGRS: $mgrs")
+                        viewModel.updateMgrsCoordinatesManually(mgrs)
                         if (viewModel.isBootEnabled()) {
                             viewModel.startMockLocationLoop()
                         }

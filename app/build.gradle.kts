@@ -22,9 +22,6 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        val googleMapsApiKey = localProperties.getProperty("GOOGLE_MAPS_API_KEY", "")
-        resValue("string", "google_maps_key", googleMapsApiKey)
     }
 
     buildTypes {
@@ -53,7 +50,6 @@ android {
 }
 
 dependencies {
-    // AndroidX un Compose bibliotēkas
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -62,27 +58,14 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-
-    // MGRS bibliotēkas (JAR faili)
     implementation(files("libs/mgrs-2.1.3.jar"))
     implementation(files("libs/grid-1.1.2.jar"))
     implementation(files("libs/sf-2.2.2.jar"))
-
-    // Kotlin stdlib (precizēta versija)
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.23")
-
-    // Lifecycle ViewModel Compose
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-
-    implementation ("org.osmdroid:osmdroid-android:6.1.14")
-    //implementation ("org.osmdroid:osmdroid-mbtiles:6.1.14")
-
-    implementation ("androidx.compose.material3:material3:1.2.1")
-
-    implementation ("androidx.preference:preference:1.2.0")
-
-
-    // Testēšanas bibliotēkas
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.viewmodel.compose)
+    implementation(libs.osmdroid.android)
+    implementation(libs.compose.material3)
+    implementation(libs.preference.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

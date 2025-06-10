@@ -26,14 +26,14 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
-import android.util.Log
 
 object MapRef {
     var mapView: MapView? = null
 }
 
 @Composable
-fun MgrsInputScreen(
+@Suppress("UNUSED_PARAMETER")
+fun InputScreen(
     logText: String,
     viewModel: LocationViewModel,
     onMgrsEntered: (String) -> Unit
@@ -51,7 +51,7 @@ fun MgrsInputScreen(
     val input by viewModel.mgrsCoordinates.collectAsState()
     val isInputValid = viewModel.isValidMgrs(input)
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabTitles = listOf("Karte", "Darbības")
+    val tabTitles = listOf("Karte", "Vēsture")
     var selectedPin by remember { mutableStateOf<GeoPoint?>(null) }
     var toggleState by remember { mutableStateOf(false) }
 
@@ -238,11 +238,10 @@ fun createMapViewWithPinListener(
         setTileSource(TileSourceFactory.MAPNIK)
         setMultiTouchControls(true)
 
-        val zoom = prefs.getFloat(PrefKeys.PREF_ZOOM_LEVEL, 8.0f).toDouble()
-        Log.d("ZOOM_PREF", "Loaded zoom level from prefs on start: $zoom")
-
+        val zoom = prefs.getFloat(PrefKeys.PREF_ZOOM_LEVEL, AppSettings.DEFAULT_ZOOM).toDouble()
         controller.setZoom(zoom)
-        controller.setCenter(GeoPoint(56.9496, 24.1052))
+        controller.setCenter(GeoPoint(AppSettings.DEFAULT_LATITUDE, AppSettings.DEFAULT_LONGITUDE))
+
         MapRef.mapView = this
     }
 
